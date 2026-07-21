@@ -175,17 +175,17 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
       - name: Upload API scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-api.sarif
           category: trivy-api
       - name: Upload web scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-web.sarif
           category: trivy-web
       - name: Upload worker scan results
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-worker.sarif
           category: trivy-worker
