@@ -1,0 +1,33 @@
+name: Nightly DB Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * *' # 18:00 UTC = midnight in Bangladesh (UTC+6)
+  workflow_dispatch: {} # allow manual trigger for testing
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client awscli
+      - name: Run backup
+        working-directory: apps/api/scripts
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          chmod +x backup-db.sh
+          ./backup-db.sh
+      # A backup that silently stopped running weeks ago is worse than no
+      # backup strategy at all — it creates false confidence. Alert on failure.
+      - name: Alert on failure
+        if: failure()
+        run: echo "::error::Nightly DB backup failed — check S3_BACKUP_BUCKET and DATABASE_URL secrets, and confirm the last successful backup timestamp."
+        # Wire this to Slack/PagerDuty/email once those integrations exist —
+        # a GitHub Actions failure notification alone is easy to miss.

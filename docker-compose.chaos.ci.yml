@@ -1,0 +1,11 @@
+version: '3.9'
+# CI-only overlay, layered on top of docker-compose.yml + docker-compose.chaos.yml.
+# Not used in local dev: normal dev reaches the api through nginx (port 80),
+# but chaos/resilience-tests.sh talks to the api directly on :4000, so CI
+# needs that port published to the runner host. Kept separate from
+# docker-compose.chaos.yml so the dev overlay doesn't gain a host port
+# nobody asked for.
+services:
+  api:
+    ports:
+      - '4000:4000'

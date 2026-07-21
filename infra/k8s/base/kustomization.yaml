@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Honest scope note (see infra/k8s/README.md for the full version): these
+# manifests are real and would deploy correctly against an actual EKS/GKE/
+# AKS cluster, but nothing here has been applied to a live cluster — there
+# isn't one in this environment. Treat this as reviewed, structurally
+# correct IaC, not as "currently running infrastructure."
+
+resources:
+  - namespace.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - api-hpa.yaml
+  - api-pdb.yaml
+  - worker-deployment.yaml
+  - worker-hpa.yaml
+  - worker-pdb.yaml
+  - web-deployment.yaml
+  - web-service.yaml
+  - web-hpa.yaml
+  - web-pdb.yaml
+  - ingress.yaml
+  - configmap.yaml
+  - secret-template.yaml
+  - network-policy.yaml

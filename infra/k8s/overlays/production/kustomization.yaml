@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-commerce
+resources:
+  - ../../base
+
+images:
+  - name: ai-commerce-api
+    newTag: REPLACED_BY_CI
+  - name: ai-commerce-web
+    newTag: REPLACED_BY_CI
+  - name: ai-commerce-worker
+    newTag: REPLACED_BY_CI

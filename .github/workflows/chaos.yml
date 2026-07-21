@@ -1,0 +1,104 @@
+name: Chaos / resilience tests
+
+# Runs the fault-injection suite in chaos/resilience-tests.sh against a real
+# docker-compose stack (Toxiproxy sitting in front of Postgres/Redis) on
+# every push and PR to main. See chaos/README.md for what this does and
+# does not cover, and for the honest note that this workflow's own first
+# green run has not yet been observed — it's correct by review, not by a
+# watched pass, as of the commit that added it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write CI-only api/.env
+        # docker-compose.yml's api service requires apps/api/.env to exist
+        # (env_file:) — only .env.example is committed, by design, so CI
+        # writes disposable dummy values, mirroring ci.yml's job env.
+        run: |
+          cat > apps/api/.env <<'EOF'
+          DATABASE_URL="postgresql://commerce:commerce_dev_only@postgres:5432/ai_commerce"
+          REDIS_URL="redis://redis:6379"
+          RABBITMQ_URL="amqp://guest:guest@rabbitmq:5672"
+          JWT_ACCESS_SECRET=ci-only-secret-not-for-prod
+          JWT_REFRESH_SECRET=ci-only-secret-not-for-prod-2
+          WEB_ORIGIN=http://localhost:3000
+          PORT=4000
+          S3_BUCKET=ci-bucket
+          S3_REGION=us-east-1
+          S3_ENDPOINT=
+          S3_ACCESS_KEY=ci-key
+          S3_SECRET_KEY=ci-secret
+          S3_PUBLIC_BASE_URL=
+          SSLCOMMERZ_STORE_ID=ci-store
+          SSLCOMMERZ_STORE_PASSWORD=ci-password
+          SSLCOMMERZ_IS_LIVE=false
+          APP_BASE_URL=http://localhost:4000
+          ANTHROPIC_API_KEY=ci-dummy-key
+          VOYAGE_API_KEY=ci-dummy-key
+          SENTRY_DSN=
+          HCAPTCHA_SECRET=
+          AWS_SECRETS_ID=
+          AWS_REGION=ap-southeast-1
+          NODE_ENV=production
+          EOF
+
+      - name: Start dependencies
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.chaos.yml \
+            -f docker-compose.chaos.ci.yml \
+            up -d postgres redis rabbitmq
+
+      - name: Build api image
+        run: docker compose -f docker-compose.yml build api
+
+      - name: Wait for Postgres and run migrations
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec -T postgres pg_isready -U commerce && break
+            sleep 2
+          done
+          docker compose run --rm --no-deps \
+            -e DATABASE_URL="postgresql://commerce:commerce_dev_only@postgres:5432/ai_commerce" \
+            api npx prisma migrate deploy
+
+      - name: Start toxiproxy and api
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.chaos.yml \
+            -f docker-compose.chaos.ci.yml \
+            up -d --build toxiproxy api
+
+      - name: Wait for api to be healthy through Toxiproxy
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/v1/health && break
+            sleep 2
+          done
+
+      - name: Register Toxiproxy proxies
+        run: ./chaos/setup-toxiproxy.sh
+
+      - name: Run resilience tests
+        run: ./chaos/resilience-tests.sh
+
+      - name: Dump api logs on failure
+        if: failure()
+        run: docker compose logs api --tail=200
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.chaos.yml -f docker-compose.chaos.ci.yml down -v
+          rm -f apps/api/.env

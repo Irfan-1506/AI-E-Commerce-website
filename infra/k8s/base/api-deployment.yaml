@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: ai-commerce
+  labels: { app: api }
+spec:
+  replicas: 3 # minimum for the PodDisruptionBudget below to mean anything
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # maxUnavailable=0 is what actually makes this zero-downtime: the new
+      # pod must be Ready before an old one is torn down, never dropping
+      # below full capacity. maxSurge=1 caps how many extra pods exist
+      # briefly during rollout (cost/capacity tradeoff, not correctness).
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: ai-commerce-api:latest # replaced by the deploy pipeline with a real tag — see .github/workflows/deploy.yml
+          ports:
+            - containerPort: 4000
+          envFrom:
+            - configMapRef: { name: api-config }
+            - secretRef: { name: api-secrets }
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: 1, memory: 512Mi }
+          # Liveness: is the process alive at all? A hang here gets the pod
+          # killed and restarted. Readiness: can it actually serve traffic
+          # right now? Separate from liveness on purpose — a pod that's
+          # alive but, say, mid-DB-reconnect should stop receiving traffic
+          # without being killed and restarted for no reason.
+          livenessProbe:
+            httpGet: { path: /v1/health, port: 4000 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /v1/health, port: 4000 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ['ALL'] }
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {} # writable /tmp despite the read-only root filesystem above — some npm packages assume they can write there
+      terminationGracePeriodSeconds: 30 # gives in-flight requests (e.g. a checkout transaction) time to finish before SIGKILL

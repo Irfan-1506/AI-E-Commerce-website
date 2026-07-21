@@ -1,0 +1,232 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+enum Role {
+  ADMIN
+  SELLER
+  CUSTOMER
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          Role      @default(CUSTOMER)
+  addresses     Address[]
+  orders        Order[]
+  reviews       Review[]
+  cart          Cart?
+  wishlist      Wishlist?
+  products      Product[] @relation("SellerProducts") // if role = SELLER
+  mfaSecret     String?   // TOTP secret, only set once mfaEnabled is confirmed via /auth/mfa/verify
+  mfaEnabled    Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String
+  country    String
+  isDefault  Boolean  @default(false)
+
+  @@index([userId])
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  slug     String     @unique
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  parentId String?
+  children Category[] @relation("CategoryTree")
+  products Product[]
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  seller      User          @relation("SellerProducts", fields: [sellerId], references: [id])
+  sellerId    String
+  name        String
+  slug        String        @unique
+  description String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  categoryId  String
+  basePrice   Decimal       @db.Decimal(10, 2)
+  currency    String        @default("BDT")
+  images      ProductImage[]
+  variants    ProductVariant[]
+  reviews     Review[]
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  // Prisma has no native pgvector type — Unsupported() fields are excluded
+  // from the generated client entirely and must be read/written via
+  // $queryRaw/$executeRaw. See semantic-search/ for how this is used.
+  embedding   Unsupported("vector(1024)")?
+
+  @@index([categoryId])
+  @@index([sellerId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  url       String
+  altText   String?
+  position  Int     @default(0)
+}
+
+model ProductVariant {
+  id         String      @id @default(cuid())
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId  String
+  sku        String      @unique
+  attributes Json        // e.g. { "size": "M", "color": "red" }
+  price      Decimal     @db.Decimal(10, 2)
+  inventory  Inventory?
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([productId])
+}
+
+model Inventory {
+  id         String         @id @default(cuid())
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId  String         @unique
+  quantity   Int            @default(0)
+  reserved   Int            @default(0) // reserved during checkout, prevents overselling
+  lowStockAt Int            @default(5)
+  updatedAt  DateTime       @updatedAt
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String     @unique
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+}
+
+model CartItem {
+  id        String         @id @default(cuid())
+  cart      Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cartId    String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  variantId String
+  quantity  Int            @default(1)
+
+  @@unique([cartId, variantId])
+}
+
+model Wishlist {
+  id     String @id @default(cuid())
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique
+  items  Json   @default("[]") // array of productIds; keep simple for v1
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  user         User        @relation(fields: [userId], references: [id])
+  userId       String
+  status       OrderStatus @default(PENDING)
+  items        OrderItem[]
+  subtotal     Decimal     @db.Decimal(10, 2)
+  discount     Decimal     @db.Decimal(10, 2) @default(0)
+  shippingFee  Decimal     @db.Decimal(10, 2) @default(0)
+  total        Decimal     @db.Decimal(10, 2)
+  couponCode   String?
+  paymentRef   String?     // gateway transaction id (SSLCommerz/bKash/Stripe)
+  paymentEvents PaymentEvent[]
+  statusHistory Json       @default("[]")
+  riskScore    Int         @default(0)   // 0-100, rule-based — see fraud/fraud.service.ts
+  riskFlags    Json        @default("[]") // human-readable reasons for the score, shown to reviewers
+  flaggedForReview Boolean @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id         String         @id @default(cuid())
+  order      Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+  variantId  String
+  quantity   Int
+  unitPrice  Decimal        @db.Decimal(10, 2)
+
+  @@index([orderId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  rating    Int      // 1-5, enforce in app layer
+  title     String?
+  body      String?
+  createdAt DateTime @default(now())
+
+  @@unique([productId, userId])
+  @@index([productId])
+}
+
+model Coupon {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  discountType  String   // "PERCENT" | "FIXED"
+  discountValue Decimal  @db.Decimal(10, 2)
+  maxUses       Int?
+  usedCount     Int      @default(0)
+  expiresAt     DateTime?
+  active        Boolean  @default(true)
+}
+
+model PaymentEvent {
+  id         String   @id @default(cuid())
+  order      Order    @relation(fields: [orderId], references: [id])
+  orderId    String
+  gateway    String   // "SSLCOMMERZ" | "STRIPE" | "BKASH"
+  tranId     String   @unique // gateway transaction id — enforces idempotent IPN processing
+  status     String   // gateway's raw status string, kept for audit trail
+  amount     Decimal  @db.Decimal(10, 2)
+  rawPayload Json
+  createdAt  DateTime @default(now())
+
+  @@index([orderId])
+}

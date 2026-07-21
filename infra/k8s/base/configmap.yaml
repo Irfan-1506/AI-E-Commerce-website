@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-config
+  namespace: ai-commerce
+data:
+  NODE_ENV: production
+  PORT: "4000"
+  WEB_ORIGIN: https://aicommerce.example.com
+  APP_BASE_URL: https://aicommerce.example.com
+  SSLCOMMERZ_IS_LIVE: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4318/v1/traces
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: worker-config
+  namespace: ai-commerce
+data:
+  LOG_LEVEL: info
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+  namespace: ai-commerce
+data:
+  NODE_ENV: production
+  API_ORIGIN: http://api.ai-commerce.svc.cluster.local
+  NEXT_PUBLIC_SITE_URL: https://aicommerce.example.com

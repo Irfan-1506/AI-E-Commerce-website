@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: ai-commerce
+  labels: { app: worker }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 1, maxSurge: 1 }
+    # maxUnavailable=1 here (not 0 like the api) is deliberate: workers
+    # don't serve live traffic, they consume a durable queue. A brief dip in
+    # consumer count during rollout just means messages sit in the queue a
+    # few seconds longer — RabbitMQ holds them, nothing is lost or dropped.
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: worker
+          image: ai-commerce-worker:latest
+          envFrom:
+            - configMapRef: { name: worker-config }
+            - secretRef: { name: worker-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          # No HTTP server in this process — liveness is "is the Node
+          # process still running," checked via exec rather than an HTTP
+          # probe that doesn't exist here.
+          livenessProbe:
+            exec: { command: ['node', '-e', 'process.exit(0)'] }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ['ALL'] }
+      terminationGracePeriodSeconds: 30 # matches index.ts's SIGTERM handler — lets an in-flight message ack/nack before the pod dies

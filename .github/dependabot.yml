@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/api
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 10
+    groups:
+      # Batch minor/patch bumps into one PR instead of one-per-package —
+      # 40 individual Dependabot PRs a week is noise nobody reviews.
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 10
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: docker
+    directory: /apps/api
+    schedule: { interval: weekly }
+
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule: { interval: weekly }
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

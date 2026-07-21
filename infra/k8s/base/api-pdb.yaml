@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  namespace: ai-commerce
+spec:
+  # minAvailable, not maxUnavailable — with autoscaling in play, a
+  # percentage-based maxUnavailable could still allow every pod to be
+  # evicted at once if replicas briefly scale down. minAvailable=2 is a
+  # floor that holds regardless of current replica count.
+  minAvailable: 2
+  selector:
+    matchLabels: { app: api }

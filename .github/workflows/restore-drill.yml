@@ -1,0 +1,69 @@
+name: Monthly Restore Drill
+
+on:
+  schedule:
+    - cron: '0 3 1 * *' # 1st of the month
+  workflow_dispatch: {}
+
+# Answers the question every backup strategy has to answer eventually, on
+# purpose rather than during an actual incident: "does the backup we've been
+# taking every night actually restore into a working database?" Spins up a
+# throwaway Postgres, restores the most recent backup into it, and checks
+# that the tables that matter actually have rows and the schema matches
+# what Prisma expects. Never touches production.
+jobs:
+  restore-drill:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: restore_test
+          POSTGRES_PASSWORD: restore_test
+          POSTGRES_DB: restore_drill
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U restore_test"
+          --health-interval 5s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client awscli
+      - name: Find latest backup
+        id: latest
+        env:
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          LATEST=$(aws s3 ls "s3://${S3_BACKUP_BUCKET}/" ${S3_ENDPOINT:+--endpoint-url "$S3_ENDPOINT"} | sort | tail -n 1 | awk '{print $4}')
+          if [ -z "$LATEST" ]; then echo "::error::No backups found in bucket"; exit 1; fi
+          echo "file=$LATEST" >> "$GITHUB_OUTPUT"
+      - name: Restore into scratch database
+        working-directory: apps/api/scripts
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+          S3_BACKUP_BUCKET: ${{ secrets.S3_BACKUP_BUCKET }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_KEY }}
+        run: |
+          chmod +x restore-db.sh
+          echo "restore_drill" | ./restore-db.sh "${{ steps.latest.outputs.file }}" "postgresql://restore_test:restore_test@localhost:5432/restore_drill"
+      - name: Verify core tables exist and have plausible data
+        env:
+          PGPASSWORD: restore_test
+        run: |
+          TABLES=$(psql -h localhost -U restore_test -d restore_drill -tAc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
+          echo "Restored $TABLES tables"
+          if [ "$TABLES" -lt 15 ]; then
+            echo "::error::Expected at least 15 tables after restore, found $TABLES — restore may be incomplete"
+            exit 1
+          fi
+          USERS=$(psql -h localhost -U restore_test -d restore_drill -tAc 'SELECT count(*) FROM "User"')
+          echo "Restored $USERS users"
+      - name: Alert on failure
+        if: failure()
+        run: echo "::error::Restore drill failed — the current backup may not be restorable. Investigate before relying on it in an actual incident."

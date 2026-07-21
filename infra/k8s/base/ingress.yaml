@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-commerce
+  namespace: ai-commerce
+  annotations:
+    # cert-manager is cluster-level infrastructure this Ingress assumes
+    # exists (see infra/terraform/README.md) — it isn't provisioned by
+    # anything in this repo.
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [aicommerce.example.com]
+      secretName: ai-commerce-tls
+  rules:
+    - host: aicommerce.example.com
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend: { service: { name: api, port: { number: 80 } } }
+          - path: /payments
+            pathType: Prefix
+            backend: { service: { name: api, port: { number: 80 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web, port: { number: 80 } } }

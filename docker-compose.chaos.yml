@@ -1,0 +1,24 @@
+version: '3.9'
+# Usage: docker compose -f docker-compose.yml -f docker-compose.chaos.yml up
+#
+# Toxiproxy sits between the api and its dependencies. Normal dev
+# (docker-compose.yml alone) talks to postgres/redis directly — this
+# overlay is opt-in specifically so chaos testing doesn't add proxy latency
+# to every regular `docker compose up`.
+services:
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.9.0
+    ports:
+      - '8474:8474' # Toxiproxy control API
+      - '15432:15432' # proxied Postgres
+      - '16379:16379' # proxied Redis
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  api:
+    environment:
+      DATABASE_URL: postgresql://commerce:commerce_dev_only@toxiproxy:15432/ai_commerce
+      REDIS_URL: redis://toxiproxy:16379
+    depends_on:
+      toxiproxy: { condition: service_started }

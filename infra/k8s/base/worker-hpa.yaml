@@ -1,0 +1,28 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker
+  namespace: ai-commerce
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 75 }
+    # Queue-depth-based scaling needs the RabbitMQ Prometheus exporter +
+    # KEDA (or the Prometheus adapter) installed on the cluster — that's
+    # cluster-level infrastructure this manifest depends on but doesn't
+    # provision. Documented here rather than pretending CPU alone is a good
+    # proxy for "the queue is backing up."
+    # - type: External
+    #   external:
+    #     metric:
+    #       name: rabbitmq_queue_messages_ready
+    #       selector: { matchLabels: { queue: worker.main } }
+    #     target: { type: AverageValue, averageValue: "100" }
