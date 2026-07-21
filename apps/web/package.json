@@ -20,7 +20,7 @@
     "@sentry/nextjs": "^8.35.0",
     "@hcaptcha/react-hcaptcha": "^1.11.0",
     "socket.io-client": "^4.8.0",
-    "recharts": "^2.13.0"
+    "recharts": "^3.10.0"
   },
   "devDependencies": {
     "typescript": "^5.5.4",
