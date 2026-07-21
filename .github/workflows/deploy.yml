@@ -27,7 +27,7 @@ jobs:
       contents: read
       id-token: write # for OIDC-based AWS auth — no long-lived AWS keys in repo secrets
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
