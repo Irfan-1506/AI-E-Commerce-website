@@ -1,18 +1,18 @@
 # --- deps ---
-FROM node:20-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY apps/api/package*.json ./
 RUN npm ci
 
 # --- build ---
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY apps/api .
 RUN npx prisma generate && npm run build
 
 # --- runtime ---
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 # Run as non-root — never run production containers as root.
