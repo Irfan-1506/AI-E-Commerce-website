@@ -23,7 +23,8 @@ function SearchResults() {
       setResults([]);
       return;
     }
-    api.search.query(q).then((r) => setResults(r.items));
+    setResults(null);
+    api.search.query(q).then((r) => setResults(r.items)).catch(() => setResults([]));
   }, [q]);
 
   return (

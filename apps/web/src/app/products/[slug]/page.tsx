@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import ProductDetailClient from './product-detail-client';
+import { getDemoProductBySlug } from '@/lib/demo-products';
 
 const API_ORIGIN = process.env.API_ORIGIN ?? 'http://localhost:4000';
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
@@ -7,10 +8,10 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
 async function fetchProduct(slug: string) {
   try {
     const res = await fetch(`${API_ORIGIN}/v1/products/${slug}`, { next: { revalidate: 60 } });
-    if (!res.ok) return null;
+    if (!res.ok) return getDemoProductBySlug(slug);
     return res.json();
   } catch {
-    return null;
+    return getDemoProductBySlug(slug);
   }
 }
 

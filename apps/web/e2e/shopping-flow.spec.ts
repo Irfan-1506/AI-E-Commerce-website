@@ -80,7 +80,7 @@ test.describe('Shopping flow', () => {
 
     // Checkout hands off to the (mocked) payment gateway, which redirects
     // back to the order confirmation page — same as the real SSLCommerz flow.
-    await page.waitForURL('**/api/v1/orders/order_1');
+    await page.waitForURL('**/orders/order_1');
     await expect(page.getByText('Order confirmed')).toBeVisible();
     await expect(page.getByText('৳2559')).toBeVisible(); // total
   });

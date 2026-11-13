@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useLocale } from '@/lib/i18n';
 
 export default function SearchBox() {
   const [q, setQ] = useState('');
   const [suggestions, setSuggestions] = useState<{ name: string; slug: string }[]>([]);
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const { t } = useLocale();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -18,7 +20,7 @@ export default function SearchBox() {
       return;
     }
     debounceRef.current = setTimeout(() => {
-      api.search.autocomplete(q).then(setSuggestions);
+      api.search.autocomplete(q).then(setSuggestions).catch(() => setSuggestions([]));
     }, 200); // debounce — avoid firing a request on every keystroke
     return () => clearTimeout(debounceRef.current);
   }, [q]);
@@ -36,7 +38,7 @@ export default function SearchBox() {
         onChange={(e) => setQ(e.target.value)}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)} // let click on a suggestion register first
-        placeholder="Search products…"
+        placeholder={t('search_placeholder')}
         aria-label="Search products"
         className="w-full border rounded-md px-3 py-1.5 text-sm"
       />

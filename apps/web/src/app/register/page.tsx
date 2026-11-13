@@ -3,7 +3,9 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
+import Link from 'next/link';
 import { api } from '@/lib/api';
+import { useLocale } from '@/lib/i18n';
 
 const HCAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY;
 
@@ -15,6 +17,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const captchaRef = useRef<HCaptcha>(null);
   const router = useRouter();
+  const { t } = useLocale();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,7 +35,7 @@ export default function RegisterPage() {
 
   return (
     <main className="max-w-sm mx-auto px-4 py-16">
-      <h1 className="text-xl font-semibold mb-6">Create account</h1>
+      <h1 className="text-xl font-semibold mb-6">{t('register_title')}</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full border rounded-md px-3 py-2" required />
         <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full border rounded-md px-3 py-2" required />
@@ -48,9 +51,12 @@ export default function RegisterPage() {
           disabled={!!HCAPTCHA_SITE_KEY && !captchaToken}
           className="w-full bg-gray-900 text-white rounded-md py-2 disabled:opacity-50"
         >
-          Sign up
+          {t('register_submit')}
         </button>
       </form>
+      <p className="text-sm text-gray-500 mt-4">
+        Already have an account? <Link href="/login" className="underline text-gray-900">Log in</Link>
+      </p>
     </main>
   );
 }

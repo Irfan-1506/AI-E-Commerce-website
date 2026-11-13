@@ -26,11 +26,21 @@ export default function CartPage() {
   const subtotal = cart?.items.reduce((sum, i) => sum + Number(i.variant.price) * i.quantity, 0) ?? 0;
 
   async function updateQty(variantId: string, quantity: number) {
-    setCart(await api.cart.updateQuantity(variantId, quantity));
+    if (!Number.isFinite(quantity) || quantity < 1) return;
+    setError(null);
+    try {
+      setCart(await api.cart.updateQuantity(variantId, quantity));
+    } catch (err: any) {
+      setError(err.message ?? 'Could not update quantity');
+    }
   }
 
   async function remove(variantId: string) {
-    setCart(await api.cart.remove(variantId));
+    try {
+      setCart(await api.cart.remove(variantId));
+    } catch (err: any) {
+      setError(err.message ?? 'Could not remove item');
+    }
   }
 
   async function checkout() {

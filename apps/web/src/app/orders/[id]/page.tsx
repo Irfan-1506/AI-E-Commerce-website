@@ -7,16 +7,18 @@ import { api, Order } from '@/lib/api';
 export default function OrderDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [order, setOrder] = useState<Order | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.orders.getById(id).then(setOrder);
+    api.orders.getById(id).then(setOrder).catch((err: any) => setError(err.message ?? 'Could not load order.'));
   }, [id]);
 
+  if (error) return <main className="max-w-xl mx-auto px-4 py-8 text-red-600">{error}</main>;
   if (!order) return <main className="max-w-xl mx-auto px-4 py-8">Loading…</main>;
 
   return (
     <main className="max-w-xl mx-auto px-4 py-8">
-      <h1 className="text-xl font-semibold mb-2">Order confirmed</h1>
+      <h1 className="text-xl font-semibold mb-2">Order {order.status.toLowerCase()}</h1>
       <p className="text-sm text-gray-500 mb-6">Order #{order.id.slice(0, 8)} · {order.status}</p>
 
       <div className="space-y-2 mb-6">

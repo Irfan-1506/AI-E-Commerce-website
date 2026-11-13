@@ -14,16 +14,17 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
   const [related, setRelated] = useState<Product[]>([]);
   const [boughtWith, setBoughtWith] = useState<Product[]>([]);
   const [reviewSummary, setReviewSummary] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     api.products.getBySlug(slug).then((p) => {
       setProduct(p);
       setSelectedVariant(p.variants?.[0]?.id ?? null);
       api.recommendations.recordView(p.id);
-      api.recommendations.related(p.id).then(setRelated);
-      api.recommendations.frequentlyBoughtWith(p.id).then(setBoughtWith);
+      api.recommendations.related(p.id).then(setRelated).catch(() => setRelated([]));
+      api.recommendations.frequentlyBoughtWith(p.id).then(setBoughtWith).catch(() => setBoughtWith([]));
       api.reviews.summary(p.id).then(setReviewSummary).catch(() => {});
-    });
+    }).catch((err: any) => setLoadError(err.message ?? 'Product not found.'));
   }, [slug]);
 
   async function addToCart() {
@@ -41,6 +42,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
     }
   }
 
+  if (loadError) return <main className="max-w-3xl mx-auto px-4 py-8 text-red-600">{loadError}</main>;
   if (!product) return <main className="max-w-3xl mx-auto px-4 py-8">Loading…</main>;
 
   const variant = product.variants?.find((v) => v.id === selectedVariant);
@@ -64,6 +66,7 @@ export default function ProductDetailClient({ slug }: { slug: string }) {
         <div>
           <h1 className="text-2xl font-semibold">{product.name}</h1>
           <p className="text-xl text-gray-700 mt-2">৳{variant?.price ?? product.basePrice}</p>
+          {product.description && <p className="mt-3 text-sm text-gray-600 leading-relaxed">{product.description}</p>}
 
           {product.variants && product.variants.length > 1 && (
             <div className="mt-4 flex gap-2">

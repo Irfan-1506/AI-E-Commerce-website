@@ -20,7 +20,7 @@ export default function AnalyticsDashboardPage() {
     // WebSocket handshake completes — a live dashboard that's blank for a
     // second on load feels broken even though it isn't.
     fetch('/api/v1/analytics/snapshot', { credentials: 'include' })
-      .then((res) => res.json())
+      .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(setSnapshot)
       .catch(() => setError('Could not load analytics — are you logged in as an admin or seller?'));
 
@@ -28,7 +28,7 @@ export default function AnalyticsDashboardPage() {
     // rewrite doesn't cover WebSocket upgrades, so this points at the API
     // origin directly — see next.config.js's rewrite for the HTTP-only
     // equivalent). Cookies are sent automatically since this is same-site.
-    const socket = io(`${window.location.protocol}//${window.location.hostname}:4000/analytics`, {
+    const socket = io(process.env.NEXT_PUBLIC_WS_ORIGIN ? `${process.env.NEXT_PUBLIC_WS_ORIGIN}/analytics` : '/analytics', {
       withCredentials: true,
     });
     socketRef.current = socket;
